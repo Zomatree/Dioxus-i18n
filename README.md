@@ -6,13 +6,8 @@ internationalization for dioxus.
 
 ```rust
 fn SubComponent(cx: Scope) -> Element {
-    let translations = use_translations::<Fluent<FluentResource>>(&cx);
-
     cx.render(rsx! {
-        Text {
-            id: "hello_world",
-            translations: translations
-        }
+        Text { "hello_world" }
     })
 }
 

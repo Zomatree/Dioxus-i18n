@@ -23,41 +23,41 @@ pub trait TranslationsProvider {
     fn format_string<'a>(&'a self, id: &'a str, locale: &'a LanguageIdentifier, args: HashMap<&'a str, Argument<'a>>) -> String;
 }
 
-pub struct Translations<T: TranslationsProvider>(RefCell<TranslationsInner<T>>);
+pub struct Translations(RefCell<TranslationsInner>);
 
-impl<T: TranslationsProvider> Deref for Translations<T> {
-    type Target = RefCell<TranslationsInner<T>>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<T: TranslationsProvider> Translations<T> {
+impl Translations {
     pub fn change_locale(&self, new_locale: LanguageIdentifier) {
         self.0.borrow_mut().current_locale = new_locale
     }
+
+    pub fn current_locale(&self) -> LanguageIdentifier {
+        self.0.borrow().current_locale.clone()
+    }
+
+    pub fn format_string<'a>(&'a self, id: &'a str, args: HashMap<&'a str, Argument<'a>>) -> String {
+        self.0.borrow().format_string(id, args)
+    }
 }
 
-pub struct TranslationsInner<T: TranslationsProvider> {
-    provider: T,
+pub struct TranslationsInner {
+    provider: Box<dyn TranslationsProvider>,
     current_locale: LanguageIdentifier
 }
 
-impl<T: TranslationsProvider> TranslationsInner<T> {
+impl TranslationsInner {
     pub fn format_string<'a>(&'a self, id: &'a str, args: HashMap<&'a str, Argument<'a>>) -> String {
         self.provider.format_string(id, &self.current_locale, args)
     }
 }
 
-pub fn use_translations<T: TranslationsProvider + 'static>(cx: &ScopeState) -> &Rc<Translations<T>> {
-    cx.use_hook(|| cx.consume_context::<Rc<Translations<T>>>()
+pub fn use_translations(cx: &ScopeState) -> &Rc<Translations> {
+    cx.use_hook(|| cx.consume_context::<Rc<Translations>>()
         .expect("use_translations called outside of Translations component"))
 }
 
 pub fn use_current_locale<T: TranslationsProvider + 'static>(cx: &ScopeState, default: LanguageIdentifier) -> LanguageIdentifier {
-    match cx.consume_context::<Rc<Translations<T>>>() {
-        Some(translations) => translations.borrow().current_locale.clone(),
+    match cx.consume_context::<Rc<Translations>>() {
+        Some(translations) => translations.current_locale(),
         None => {
             #[cfg(feature = "web")]
             {
@@ -109,7 +109,7 @@ pub fn TranslationsProvider<'a, T: TranslationsProvider + 'static>(cx: Scope<'a,
         let current_locale = use_current_locale::<T>(&cx, cx.props.default_locale.clone());
 
         let inner = TranslationsInner {
-            provider: cx.props.provider.take().unwrap(),
+            provider: Box::new(cx.props.provider.take().unwrap()),
             current_locale
         };
 
@@ -122,18 +122,14 @@ pub fn TranslationsProvider<'a, T: TranslationsProvider + 'static>(cx: Scope<'a,
 }
 
 #[derive(Props)]
-pub struct TextProps<'a, T: TranslationsProvider> {
-    id: &'a str,
-    translations: &'a Rc<Translations<T>>,
-
+pub struct TextProps<'a> {
     #[props(optional)]
-    attributes: Option<&'a [Attribute<'a>]>
+    attributes: Option<&'a [Attribute<'a>]>,
+    children: Element<'a>
 }
 
 #[allow(non_snake_case)]
-pub fn Text<'a, T: TranslationsProvider>(cx: Scope<'a, TextProps<'a, T>>) -> Element<'a> {
-    let translations = cx.props.translations;
-
+pub fn Text<'a>(cx: Scope<'a, TextProps<'a>>) -> Element<'a> {
     let attrs = cx.props.attributes.map_or_else(HashMap::new, |attrs| attrs.iter().map(|attr| {
         (attr.name, match attr.value {
             AttributeValue::Text(text) => Argument::String(text),
@@ -148,11 +144,21 @@ pub fn Text<'a, T: TranslationsProvider>(cx: Scope<'a, TextProps<'a, T>>) -> Ele
         })
     }).collect());
 
-    let inner = translations.borrow();
+    let id = get_element_id(cx.props.children.as_ref());
 
-    let text = inner.format_string(cx.props.id, attrs);
+    let translations = use_translations(&cx);
+
+    let text = translations.format_string(id, attrs);
 
     cx.render(rsx! {
         "{text}"
     })
+}
+
+fn get_element_id<'a>(node: Option<&'a VNode>) -> &'a str {
+    match node.as_ref().expect("Missing Text id") {
+        VNode::Text(text_node) => text_node.text,
+        VNode::Fragment(fragment) => get_element_id(fragment.children.get(0)),
+        _ => panic!("Text children should be a single string of the id")
+    }
 }
