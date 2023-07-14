@@ -5,14 +5,13 @@ internationalization for dioxus.
 ## Example
 
 ```rust
-fn SubComponent(cx: Scope) -> Element {
-    cx.render(rsx! {
-        Text { "hello" }
-    })
-}
+use fluent_bundle::{FluentBundle, FluentResource};
+use unic_langid::langid;
+
+use dioxus_i18n::{Text, Fluent, use_translations_provider};
 
 fn app(cx: Scope) -> Element {
-    let fluent = cx.use_hook(|| {
+    use_translations_provider(cx, langid!("en-GB"), || {
         let en = "hello = Hello World!";
 
         let mut langs = HashMap::new();
@@ -22,16 +21,13 @@ fn app(cx: Scope) -> Element {
 
         langs.insert(langid!("en-GB"), bundle);
 
-        Cell::new(Some(Fluent::new(langs)))
+        Fluent::new(langs)
     });
 
+    let translations = use_translations(cx);
+
     cx.render(rsx! {
-        TranslationsProvider {
-            provider: fluent,
-            default_locale: langid!("en-GB"),
-            SubComponent {}
-        }
+        Text { "hello" }
     })
 }
-
 ```

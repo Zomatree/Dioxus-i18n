@@ -32,6 +32,7 @@ impl<R: Borrow<FluentResource>> TranslationsProvider for Fluent<R> {
             (key, match value {
                 Argument::String(s) => FluentValue::String(Cow::Borrowed(s)),
                 Argument::Number(n) => FluentValue::Number(FluentNumber::new(n, FluentNumberOptions::default())),
+                Argument::Float(f) => FluentValue::Number(FluentNumber::new(f, FluentNumberOptions { style: fluent_bundle::types::FluentNumberStyle::Decimal, ..Default::default() }))
             })
         }).collect();
 

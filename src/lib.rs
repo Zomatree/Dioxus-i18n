@@ -14,9 +14,11 @@ compile_error!("Only one of the web and desktop features can be used");
 #[cfg(not(any(feature = "web", feature = "desktop")))]
 compile_error!("No features set, one of web or desktop must be used");
 
+#[derive(Clone, Copy)]
 pub enum Argument<'a> {
     String(&'a str),
-    Number(f64)
+    Number(f64),
+    Float(f64),
 }
 
 pub trait TranslationsProvider {
@@ -52,7 +54,7 @@ impl TranslationsInner {
 
 pub fn use_translations(cx: &ScopeState) -> &Rc<Translations> {
     cx.use_hook(|| cx.consume_context::<Rc<Translations>>()
-        .expect("use_translations called outside of Translations component"))
+        .expect("use_translations called before use_translations_provider called"))
 }
 
 pub fn use_current_locale<T: TranslationsProvider + 'static>(cx: &ScopeState, default: LanguageIdentifier) -> LanguageIdentifier {
@@ -96,49 +98,29 @@ mod desktop {
     // future persistant desktop storage here
 }
 
-#[derive(Props)]
-pub struct TranslationsProviderProps<'a, T: TranslationsProvider> {
-    provider: &'a Cell<Option<T>>,
-    default_locale: LanguageIdentifier,
-    children: Element<'a>
-}
-
-#[allow(non_snake_case)]
-pub fn TranslationsProvider<'a, T: TranslationsProvider + 'static>(cx: Scope<'a, TranslationsProviderProps<'a, T>>) -> Element<'a> {
+pub fn use_translations_provider<P: TranslationsProvider + 'static>(cx: &ScopeState, default: LanguageIdentifier, hook: impl FnOnce() -> P) -> &mut Rc<Translations> {
     cx.use_hook(|| {
-        let current_locale = use_current_locale::<T>(&cx, cx.props.default_locale.clone());
+        let current_locale = use_current_locale::<P>(&cx, default);
 
         let inner = TranslationsInner {
-            provider: Box::new(cx.props.provider.take().unwrap()),
+            provider: Box::new(hook()),
             current_locale
         };
 
         cx.provide_context(Rc::new(Translations(RefCell::new(inner))))
-    });
-
-    cx.render(rsx! {
-        &cx.props.children
     })
 }
 
 #[derive(Props)]
 pub struct TextProps<'a> {
     #[props(optional)]
-    attributes: Option<&'a [Attribute<'a>]>,
+    args: Option<HashMap<&'a str, Argument<'a>>>,
     children: Element<'a>
 }
 
 #[allow(non_snake_case)]
 pub fn Text<'a>(cx: Scope<'a, TextProps<'a>>) -> Element<'a> {
-    let attrs = cx.props.attributes.map_or_else(HashMap::new, |attrs| attrs.iter().map(|attr| {
-        (attr.name, match attr.value {
-            AttributeValue::Text(text) => Argument::String(text),
-            AttributeValue::Int(i) => Argument::Number(i as f64),
-            AttributeValue::Float(f) => Argument::Number(f),
-            AttributeValue::Bool(b) => Argument::Number(b as u8 as f64),
-            _ => panic!("Argument type not supported, only text, numbers and bools are sup")
-        })
-    }).collect());
+    let attrs = cx.props.args.as_ref().cloned().unwrap_or_default();
 
     let id = get_element_id(cx.props.children.as_ref());
 
