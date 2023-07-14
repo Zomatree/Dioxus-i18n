@@ -1,6 +1,6 @@
 use dioxus::{prelude::*, core::Attribute};
 use dioxus::core::AttributeValue;
-use std::{rc::Rc, cell::{Cell, RefCell}, ops::Deref, collections::HashMap};
+use std::{rc::Rc, cell::{Cell, RefCell}, collections::HashMap};
 use unic_langid::LanguageIdentifier;
 
 #[cfg(feature = "fluent")]
@@ -71,7 +71,7 @@ pub fn use_current_locale<T: TranslationsProvider + 'static>(cx: &ScopeState, de
             }
             #[cfg(feature = "desktop")]
             {
-                todo!()
+                default
             }
         }
     }
@@ -93,12 +93,12 @@ mod storage {
 
 #[cfg(feature = "desktop")]
 mod desktop {
-
+    // future persistant desktop storage here
 }
 
 #[derive(Props)]
 pub struct TranslationsProviderProps<'a, T: TranslationsProvider> {
-    provider: Cell<Option<T>>,
+    provider: &'a Cell<Option<T>>,
     default_locale: LanguageIdentifier,
     children: Element<'a>
 }
@@ -133,12 +133,8 @@ pub fn Text<'a>(cx: Scope<'a, TextProps<'a>>) -> Element<'a> {
     let attrs = cx.props.attributes.map_or_else(HashMap::new, |attrs| attrs.iter().map(|attr| {
         (attr.name, match attr.value {
             AttributeValue::Text(text) => Argument::String(text),
-            AttributeValue::Float32(n) => Argument::Number(n as f64),
-            AttributeValue::Float64(n) => Argument::Number(n),
-            AttributeValue::Int32(n) => Argument::Number(n as f64),
-            AttributeValue::Int64(n) => Argument::Number(n as f64),
-            AttributeValue::Uint32(n) => Argument::Number(n as f64),
-            AttributeValue::Uint64(n) => Argument::Number(n as f64),
+            AttributeValue::Int(i) => Argument::Number(i as f64),
+            AttributeValue::Float(f) => Argument::Number(f),
             AttributeValue::Bool(b) => Argument::Number(b as u8 as f64),
             _ => panic!("Argument type not supported, only text, numbers and bools are sup")
         })
@@ -156,9 +152,12 @@ pub fn Text<'a>(cx: Scope<'a, TextProps<'a>>) -> Element<'a> {
 }
 
 fn get_element_id<'a>(node: Option<&'a VNode>) -> &'a str {
-    match node.as_ref().expect("Missing Text id") {
-        VNode::Text(text_node) => text_node.text,
-        VNode::Fragment(fragment) => get_element_id(fragment.children.get(0)),
-        _ => panic!("Text children should be a single string of the id")
+    let node = node.expect("Missing Text id");
+    let template = node.template.get();
+    let root = template.roots.get(0).expect("No children on Text");
+
+    match root {
+        TemplateNode::Text { text } => *text,
+        _ => panic!("Expected static text for id")
     }
 }

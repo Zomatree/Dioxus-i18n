@@ -7,26 +7,31 @@ internationalization for dioxus.
 ```rust
 fn SubComponent(cx: Scope) -> Element {
     cx.render(rsx! {
-        Text { "hello_world" }
+        Text { "hello" }
     })
 }
 
 fn app(cx: Scope) -> Element {
-    let en = "hello_world = Hello World!";
+    let fluent = cx.use_hook(|| {
+        let en = "hello = Hello World!";
 
-    let mut langs = HashMap::new();
+        let mut langs = HashMap::new();
 
-    let mut bundle = FluentBundle::<FluentResource>::new(vec![langid!("en-GB")]);
-    bundle.add_resource(FluentResource::try_new(en.to_string()).unwrap()).unwrap();
+        let mut bundle = FluentBundle::<FluentResource>::new(vec![langid!("en-GB")]);
+        bundle.add_resource(FluentResource::try_new(en.to_string()).unwrap()).unwrap();
 
-    langs.insert(langid!("en-GB"), bundle);
+        langs.insert(langid!("en-GB"), bundle);
+
+        Cell::new(Some(Fluent::new(langs)))
+    });
 
     cx.render(rsx! {
         TranslationsProvider {
-            provider: Cell::new(Some(Fluent::new(langs))),
+            provider: fluent,
             default_locale: langid!("en-GB"),
             SubComponent {}
         }
     })
 }
+
 ```
