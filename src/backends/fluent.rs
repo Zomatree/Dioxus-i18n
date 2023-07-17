@@ -2,7 +2,7 @@ use fluent_bundle::{FluentBundle, FluentResource, FluentValue, types::{FluentNum
 use unic_langid::LanguageIdentifier;
 use std::{collections::HashMap, borrow::{Borrow, Cow}};
 
-use crate::{TranslationsProvider, Argument};
+use crate::{provider::TranslationsProvider, Argument};
 
 pub struct Fluent<R: Borrow<FluentResource>> {
     bundles: HashMap<LanguageIdentifier, FluentBundle<R>>
